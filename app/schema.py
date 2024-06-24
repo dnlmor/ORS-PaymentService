@@ -1,61 +1,41 @@
 import graphene
 from graphene_sqlalchemy import SQLAlchemyObjectType
-from app.models import Payment
-from app import db
+from .models import Payment as PaymentModel, PaymentStatus
+from .resolvers import (
+    resolve_process_payment, resolve_get_payment, resolve_list_payments
+)
 
-class PaymentType(SQLAlchemyObjectType):
+class PaymentStatusEnum(graphene.Enum):
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+class Payment(SQLAlchemyObjectType):
     class Meta:
-        model = Payment
+        model = PaymentModel
+
+class Query(graphene.ObjectType):
+    get_payment = graphene.Field(Payment, id=graphene.Int(required=True))
+    list_payments = graphene.List(Payment, order_id=graphene.Int())
+
+    def resolve_get_payment(self, info, id):
+        return resolve_get_payment(info, id)
+
+    def resolve_list_payments(self, info, order_id=None):
+        return resolve_list_payments(info, order_id)
 
 class ProcessPayment(graphene.Mutation):
-    payment = graphene.Field(PaymentType)
-
     class Arguments:
         order_id = graphene.Int(required=True)
         amount = graphene.Float(required=True)
         payment_method = graphene.String(required=True)
-        address = graphene.String()
 
-    def mutate(self, info, order_id, amount, payment_method, address=None):
-        payment = Payment(
-            order_id=order_id,
-            amount=amount,
-            payment_method=payment_method,
-            address=address
-        )
-        db.session.add(payment)
-        db.session.commit()
-        return ProcessPayment(payment=payment)
+    payment = graphene.Field(lambda: Payment)
 
-class UpdatePaymentStatus(graphene.Mutation):
-    payment = graphene.Field(PaymentType)
-
-    class Arguments:
-        payment_id = graphene.Int(required=True)
-        status = graphene.String(required=True)
-
-    def mutate(self, info, payment_id, status):
-        payment = Payment.query.get(payment_id)
-        if not payment:
-            raise ValueError("Payment not found")
-
-        payment.status = status
-        db.session.commit()
-
-        return UpdatePaymentStatus(payment=payment)
-
-class Query(graphene.ObjectType):
-    payment = graphene.Field(PaymentType, id=graphene.Int())
-    payments = graphene.List(PaymentType, order_id=graphene.Int())
-
-    def resolve_payment(self, info, id):
-        return Payment.query.get(id)
-
-    def resolve_payments(self, info, order_id):
-        return Payment.query.filter_by(order_id=order_id).all()
+    def mutate(self, info, order_id, amount, payment_method):
+        return resolve_process_payment(info, order_id, amount, payment_method)
 
 class Mutation(graphene.ObjectType):
     process_payment = ProcessPayment.Field()
-    update_payment_status = UpdatePaymentStatus.Field()
 
 schema = graphene.Schema(query=Query, mutation=Mutation)

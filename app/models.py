@@ -1,11 +1,20 @@
-from datetime import datetime
-from app import db
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum
+from .database import Base
+import datetime
+import enum
 
-class Payment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    payment_method = db.Column(db.String(50), nullable=False)
-    status = db.Column(db.String(50), default='pending')
-    address = db.Column(db.String(250))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+class PaymentStatus(enum.Enum):
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+class Payment(Base):
+    __tablename__ = 'payments'
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, nullable=False)
+    amount = Column(Float, nullable=False)
+    status = Column(Enum(PaymentStatus), nullable=False, default=PaymentStatus.PENDING)
+    payment_method = Column(String, nullable=False)
+    transaction_id = Column(String, unique=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
